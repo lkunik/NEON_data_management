@@ -1,7 +1,7 @@
 #######################
 #' 2a_qaqc.r
 #' Description: Univ of Utah (UU) QAQC routine for NEON eddy covariance data
-#' 
+#'
 #'  Based on Rich Fiorella's NEON extraction functions
 #######################
 
@@ -11,18 +11,18 @@
 #########################################
 
 #' qaqc_NEON_data()
-#' 
-#' Performs data filtering by removing outlier data based on 2D histograms of  
+#'
+#' Performs data filtering by removing outlier data based on 2D histograms of
 #' turbulent and storage fluxes. Creates diagnostic plots if desired
-#' 
+#'
 #' @param site string, 4-letter NEON site code
 #' @param data_dir string, main directory where data folders are stored
 #'         (e.g. parent directory to the "1_raw/" and "2_extracted/" dirs)
-#' @param plot_diagnostics boolean, Should diagnostic plots be created? (plots go to 
+#' @param plot_diagnostics boolean, Should diagnostic plots be created? (plots go to
 #'  standard output and are not saved to files)
 #' @param plot_extra_diagnostics boolean, Should the extra diagnostic plots be created?
 #'  (plots go to standard output and are not saved to files)
-#' @param overwrite_postQC boolean (T/F) should the postQC outfile be 
+#' @param overwrite_postQC boolean (T/F) should the postQC outfile be
 #'         overwritten if it already exists? (default = FALSE)
 #' @export
 #'
@@ -30,7 +30,7 @@
 qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
                            plot_extra_diagnostics = FALSE,
                            overwrite_postQC = FALSE){
-  
+
   #for debug
   # data_dir <- "/Users/lkunik/Documents/Eddy_Covariance/NEON_data_mgmt/data/"
   # working_dir <-"/Users/lkunik/Documents/Eddy_Covariance/NEON_data_mgmt/"
@@ -38,32 +38,32 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
   # overwrite_postQC <- TRUE
   # #plot_data <- TRUE
   # plot_extra_diagnostics = FALSE
-  
+
   library(ggplot2)
   library(plotly)
   library(patchwork)
-  
- 
-  
+
+
+
   inpath <- paste0(data_dir, "2_extracted/") # path to "preQC" input data
   outpath <- paste0(data_dir, "3_qaqc") # path to "postQC" output data (note - must not end with tailing slash)
   if(!dir.exists(outpath)){
     message(paste0("creating dir ", outpath))
     dir.create(outpath)
   }
-  
+
   # site-specific path has the "NEO" identifier in the sub-folder
   site_path <- sprintf("%sNEO_%s/", inpath, site)
-  
+
   # get files in folder (these are saved by individual years)
   files <- list.files(site_path)
-  
+
   # sanity check - are there any input files to use for this step?
   if(length(files) == 0){
     message(paste0("no input files found for ", site, " site"))
     return(NULL)
   }
-  
+
   # read and concatenate annual files
   for (i in 1:length(files)) {
     df <- read.table(paste0(site_path, files[i]), header = TRUE)
@@ -74,32 +74,32 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       df_all_years <- rbind.data.frame(df_all_years, df)
     }
   }
-  
+
   #re-assign to "df" object now that "df_all_years" contains all years of data
-  df <- df_all_years 
-  rm(df_all_years) 
-  
+  df <- df_all_years
+  rm(df_all_years)
+
   # find start and end year for the data
   years <- unique(df$Year)
   start_year <- min(years)
   end_year <- max(years)
-  
+
   # Define the name of the output file
-  outfile <- sprintf("%s/NEO_%s-%4d-%4d-postQC.txt", outpath, site, start_year, end_year)
-  
+  outfile <- sprintf("%s/NEO_%s-%4d-%4d-extracted.txt", outpath, site, start_year, end_year)
+
   # Check if any output files already exist for this site
   outfiles <- list.files(outpath, pattern = paste0("NEO_", site), full.names = T)
-  
+
   # if there any existing output files, decide what to do with them
   if(length(outfiles) > 0){
-    
+
     # loop through all the existing output files
     for(check_file in outfiles){
-      
+
       # check if this filename is a duplicate of the one we are about to write
       # i.e. the start and end year match the input data we are about to process
       if(check_file == outfile){
-        
+
         # Delete this file *if* the overwrite_postQC input argument is set to TRUE
         if(overwrite_postQC){
           message(paste0(outfile, " found, removing so file can be overwritten"))
@@ -112,25 +112,25 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       } else{ #if the file to check != the output file we were going to write (i.e. contains fewer years of data)
         message(paste0("found old existing file ", check_file, ", deleting..."))
         system(paste0("rm ", check_file))
-      } #end if(checkfile == outfile) statement 
+      } #end if(checkfile == outfile) statement
     } #end checkfile for-loop (existing files in output dir)
   } #end if(any existing files in output dir) stmt
-  
+
   #---------------
   # parse data file
   fracyr <- df$Year + (df$DoY + df$Hour/24)/365 #fractional year
   dd <- df$DoY + df$Hour/24 #decimal day of year
   fracday <- df$Hour/24 #fractional day
-  
+
   # 8 plots per page
   layout(matrix(c(1,2,3,4,5,6,7,8), nrow=2, ncol=4, byrow=TRUE))
-  
+
   #TURB###############################################################
   #---------------
   # QC for turbulent flux using light response during day
-  
+
   PAR_threshold <- 5     # this is used to distinguish night versus day
-  
+
   # light response curve for turbulent flux (all data)
   if (plot_extra_diagnostics) {
     message("plotting light response of turbulent fluxes")
@@ -140,50 +140,50 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
     test <- !is.na(df$data.fluxCo2.turb.flux)
     sum_total <- sum(test, na.rm=TRUE) # this is used below to calculate percentages
     text(500, 37, sprintf("n=%d", sum_total, col="red"))
-  
+
     # split based on NEON flags
     test <- df$qfqm.fluxCo2.turb.qfFinl == 1
     plot(df$PAR[test], df$data.fluxCo2.turb.flux[test], type="p", ylim=c(-40,40),
          main='qfqm.fluxCo2.turb.qfFinl == 1 bad', pch=16, col="dodgerblue",
          sub=sprintf('n=%d', sum(test, na.rm = TRUE)))
     text(500, 37, sprintf("n=%d", sum(test, na.rm=TRUE)), col="red")
-  
+
     test <- df$qfqm.fluxCo2.turb.qfFinl == 0
     plot(df$PAR[test], df$data.fluxCo2.turb.flux[test], type="p", ylim=c(-40,40),
          main='qfqm.fluxCo2.turb.qfFinl == 0 good', pch=16, col="forestgreen",
          sub=sprintf('n=%d', sum(test, na.rm = TRUE)))
     pct_removed <- 100-100*(sum_total-sum(test, na.rm=TRUE))/sum_total
     text(500, 37, sprintf("n=%d, %1.2f %% removed", sum(test, na.rm=TRUE), pct_removed), col="blue")
-  
+
   }
-  
+
   # now parse based on 2D histogram
   message(paste0("parsing data based on 2D turbulent flux histogram, site: ", site))
-  
+
   # initial data set, x and y must match in dimension
   x <- df$PAR
   y <- df$data.fluxCo2.turb.flux
-  
+
   # filter for only datatime data (force data below the PAR_threshold to NA)
   test <- df$PAR >= PAR_threshold
   x[!test] <- NA
   y[!test] <- NA
-  
+
   # omit extremes in x
   test <- x > 2500
   x[test] <- NA
-  
+
   # omit extremes in y
   flux_ylim <- 40
   test <- y < -1*flux_ylim | y > flux_ylim
   y[test] <- NA
-  
+
   # bins for x and y
   nbins <- 75
   seq_x <- seq(0,2500, length=nbins)
     seq_x[1] <- PAR_threshold     # omit lowest PAR in first bin (night)
   seq_y <- seq(-1*flux_ylim, flux_ylim, length=nbins)
-  
+
   # #-------top---------------------------------------
   # # this code shows the 2D histogram (not needed for removal of outliers)
   # # calculate frequency of occurrence (count) in each bin
@@ -217,9 +217,9 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
   #     yaxis = list(title = "PAR"),
   #     zaxis = list(title = "# of occurrences")
   #   ))
-  
+
   #-------bot------------------------------------------
-  
+
   # calculate frequency of occurrence (count) in each bin
   bin_count <- rep(NA, length(df$PAR)) # same size as x and y, all NA
   for (i in 1:(length(seq_x)-1)) {
@@ -228,25 +228,25 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       bin_count[test] <- sum(test, na.rm=TRUE)       # bin count, linked to xy pairs
     }
   }
-  
+
   # calculate quantiles for bin counts, first omitting bin_count = 0 or NA
   # any xy pairs that are outside the bins will retain a bin_count=NA
   tmp <- bin_count[!is.na(bin_count) & bin_count != 0]
   quants <- quantile(tmp, probs = c(0.01, 0.02, 0.03), na.rm=TRUE)
-  
+
   # plot all data, and those in each of the 3 quantiles
   if (plot_extra_diagnostics) {
     message("plotting turbulent flux quantiles")
     plot(x, y, pch=16, col="grey90", main=sprintf("%s: data.fluxCo2.turb.flux", site))
       test_01 <- bin_count <= quants[1]
       points(x[test_01], y[test_01], pch=16, col="red")
-  
+
       test_02 <- bin_count <= quants[2] & bin_count > quants[1]
       points(x[test_02], y[test_02], pch=16, col="green")
-  
+
       test_03 <- bin_count <= quants[3] & bin_count > quants[2]
       points(x[test_03], y[test_03], pch=16, col="purple")
-  
+
       # some statistics
       text(500, 38, sprintf("p=.03 %1.2f %% removed",
                             100*sum(test_03|test_02|test_01, na.rm=TRUE)/sum_total), col="blue")
@@ -254,42 +254,42 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
                             100*sum(test_02|test_01, na.rm=TRUE)/sum_total), col="blue")
       text(500, 32, sprintf("p=.01 %1.2f %% removed",
                             100*sum(test_01, na.rm=TRUE)/sum_total), col="blue")
-  
+
       rm(test_01, test_02, test_03)
-  
+
   }
-  
+
   # this test indicates the good data
   test <- bin_count > quants[3]
-  
+
   # save this test for ANDing below
   # this should have same number of rows as the original dataframe df
   test_after_LR_correction <- test
-  
+
   #---------------
   # QC for turbulent flux using T response at night
   message(paste0("parsing turbulent flux data with nighttime Temp response, site: ", site))
-  
+
   # T response curve for turbulent flux (all data with PAR < threshold)
   # filter for only at night (force day part of y and flag columns to NA)
   x <- df$Tair
   y <- df$data.fluxCo2.turb.flux
   NEON_flag <- df$qfqm.fluxCo2.turb.qfFinl
-  
+
   # for daytime periods force x and y to NA (maintains the original dimension)
   test <- df$PAR > PAR_threshold
   x[test] <- NA
   y[test] <- NA
   NEON_flag[test] <- NA
-  
+
   # omit extremes in y
   test <- y < -1*flux_ylim | y > flux_ylim
   y[test] <- NA
-  
+
   # limits for x axis
   xlim_min <- min(x, na.rm=TRUE)
   xlim_max <- max(x, na.rm=TRUE)
-  
+
   if (plot_extra_diagnostics) {
     message("plotting Temp response of nighttime turbulent flux")
     title = paste0(site, ': T response turb flux (PAR < 5)')
@@ -318,13 +318,13 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
 
   # now parse based on 2D histogram
   message("reparsing 2D histogram after flitering for Temp response")
-  
+
   # initial data set, x and y must match in dimension
-  
+
   # bins for x and y (nbins is specified above)
   seq_x <- seq(-40, 50, length=nbins)
   seq_y <- seq(-1*flux_ylim, flux_ylim, length=nbins)
-  
+
   # calculate frequency of occurrence (count) in each bin
   bin_count <- rep(NA, length(df$PAR)) # same size as x and y, all NA
   for (i in 1:(length(seq_x)-1)) {
@@ -333,11 +333,11 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       bin_count[test] <- sum(test, na.rm=TRUE)       # bin count, linked to xy pairs
     }
   }
-  
+
   # calculate quantiles for bin counts, first omitting bin_count = 0 or NA
   tmp <- bin_count[!is.na(bin_count) & bin_count != 0]
   quants <- quantile(tmp, probs = c(0.01, 0.02, 0.03), na.rm=TRUE)
-  
+
   # plot all data, and those in each of the 3 quantiles
   if (plot_extra_diagnostics) {
     message("plotting turbulent flux quantiles after 2nd round of parsing")
@@ -346,13 +346,13 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
          ylim = c(-40, 40))
     test_01 <- bin_count <= quants[1]
     points(x[test_01], y[test_01], pch=16, col="red")
-  
+
     test_02 <- bin_count <= quants[2] & bin_count > quants[1]
     points(x[test_02], y[test_02], pch=16, col="green")
-  
+
     test_03 <- bin_count <= quants[3] & bin_count > quants[2]
     points(x[test_03], y[test_03], pch=16, col="purple")
-  
+
     # some statistics
     xloc <- xlim_min + (xlim_max-xlim_min)*0.25
     text(xloc, 38, sprintf("p=.03 %1.2f %% removed",
@@ -362,48 +362,48 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
     text(xloc, 32, sprintf("p=.01 %1.2f %% removed",
                           100*sum(test_01, na.rm=TRUE)/sum_total), col="blue")
     rm(test_01, test_02, test_03)
-  
+
   }
-  
+
   message("determining UU turbulent flux flags")
-  
+
   # this test indicates the good data
   test <- bin_count > quants[3]
-  
+
   # save this test for ANDing below
   test_after_TR_correction <- test
   rm(test)
-  
+
   # merge data that passed both light response (LR) and temperature response (TR) tests
   test_both <- test_after_TR_correction | test_after_LR_correction
   test_both[is.na(test_both)] <- FALSE
-  
+
   # add a column for final turb flux quality flag
   df <- mutate(df, test_both)
   names(df)[names(df)=="test_both"] <- "UU_turb_flux_flag"
-  
+
   # layout(matrix(c(1), nrow=1, ncol=1, byrow=TRUE))
   # test <- df$UU_turb_flux_flag
   # plot(df$PAR, df$data.fluxCo2.turb.flux, pch=16, col="black", ylim=c(-40,40))
   # points(df$PAR[test], df$data.fluxCo2.turb.flux[test], pch=16, col="red")
-  
+
   rm(test_after_TR_correction, test_after_LR_correction, test_both)
 
   ###############################################################
   # END TURBULENT FLUX QC
   ###############################################################
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
   ###############################################################
   # BEGIN STORAGE FLUX QC
   ###############################################################
-  
+
   # QC for storage flux using diel pattern (storage flux versus hour of day)
-  
+
   # diel pattern of storage flux (all data)
   if (plot_extra_diagnostics) {
     message("plotting diel storage flux patterns")
@@ -413,39 +413,39 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
     test <- !is.na(df$data.fluxCo2.stor.flux)
     sum_total <- sum(test, na.rm=TRUE)
     text(0.1, 37, sprintf("n=%d", sum_total, col="red"))
-  
+
     # split based on NEON flags
     test <- df$qfqm.fluxCo2.stor.qfFinl == 1
     plot(fracday[test], df$data.fluxCo2.stor.flux[test], type="p", ylim=c(-40,40),
          main='qfqm.fluxCo2.stor.qfFinl == 1 bad', pch=16, col="dodgerblue",
          sub=sprintf('n=%d', sum(test, na.rm = TRUE)))
     text(0.1, 37, sprintf("n=%d", sum(test, na.rm=TRUE)), col="red")
-  
+
     test <- df$qfqm.fluxCo2.stor.qfFinl == 0
     plot(fracday[test], df$data.fluxCo2.stor.flux[test], type="p", ylim=c(-40,40),
          main='qfqm.fluxCo2.stor.qfFinl == 0 good', pch=16, col="forestgreen",
          sub=sprintf('n=%d', sum(test, na.rm = TRUE)))
     pct_removed <- 100-100*(sum_total-sum(test, na.rm=TRUE))/sum_total
     text(0.2, 37, sprintf("n=%d, %1.2f %% removed", sum(test, na.rm=TRUE), pct_removed), col="blue")
-  
+
   }
-  
+
   # now parse based on 2D histogram
   message(paste0("parsing data based on 2D storage flux histogram, site: ", site))
-  
+
   # initial data set, x and y must match in dimension
   x <- fracday
   y <- df$data.fluxCo2.stor.flux
   # omit extremes in y
   test <- y < -1*flux_ylim | y > flux_ylim
   y[test] <- NA
-  
+
   # bins for x and y
   nxbins <- 48
   nybins <- 75
   seq_x <- seq(0,1, length=nxbins)
   seq_y <- seq(-1*flux_ylim, flux_ylim, length=nybins)
-  
+
   # calculate frequency of occurrence (count) in each bin
   bin_count <- rep(NA, length(x)) # same size as x and y, all NA
   for (i in 1:(length(seq_x)-1)) {
@@ -454,23 +454,23 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       bin_count[test] <- sum(test, na.rm=TRUE)       # bin count, linked to xy pairs
     }
   }
-  
+
   # calculate quantiles for bin counts, first omitting bin_count = 0 or NA
   tmp <- bin_count[!is.na(bin_count) & bin_count != 0]
   quants <- quantile(tmp, probs = c(0.01, 0.02, 0.03), na.rm=TRUE)
-  
+
   # plot all data, and those in each of the 3 quantiles
   if (plot_extra_diagnostics) {
     plot(x, y, pch=16, col="grey90", main=sprintf("%s: data.fluxCo2.stor.flux", site))
     test_01 <- bin_count <= quants[1]
     points(x[test_01], y[test_01], pch=16, col="red")
-  
+
     test_02 <- bin_count <= quants[2] & bin_count > quants[1]
     points(x[test_02], y[test_02], pch=16, col="green")
-  
+
     test_03 <- bin_count <= quants[3] & bin_count > quants[2]
     points(x[test_03], y[test_03], pch=16, col="purple")
-  
+
     # some statistics
     text(0.2, 38, sprintf("p=.03 %1.2f %% removed",
                            100*sum(test_03|test_02|test_01, na.rm=TRUE)/sum_total), col="blue")
@@ -479,44 +479,44 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
     text(0.2, 32, sprintf("p=.01 %1.2f %% removed",
                            100*sum(test_01, na.rm=TRUE)/sum_total), col="blue")
     rm(test_01, test_02, test_03)
-  
+
   }
-  
+
   # flag to indicate good storage flux data
   message("determining UU storage flux flags")
-  
+
   # this should have same number of rows of the original dataframe df
   test <- bin_count > quants[3]
   test_after_stor_correction <- test
   test_after_stor_correction[is.na(test_after_stor_correction)] <- FALSE
-  
+
   # add a column for final stor flux quality flag
   df <- mutate(df, test_after_stor_correction)
   names(df)[names(df)=="test_after_stor_correction"] <- "UU_stor_flux_flag"
-  
+
   ###############################################################
   # END STORAGE FLUX QC
   ###############################################################
-  
+
   # add a column for NEE, based on the UU quality flags
   test <- df$UU_turb_flux_flag & df$UU_stor_flux_flag
   UU_NEE <- rep(NA, length(df$Year))
   UU_NEE[test] <- df$data.fluxCo2.turb.flux[test] + df$data.fluxCo2.stor.flux[test]
   df <- mutate(df, UU_NEE)
-  
+
   # save output file containing new flag columns
   message(paste0("writing postQC file: ", outfile))
   write.table(df, outfile, append=FALSE)
-  
+
   # Check - do we want to plot diagnostics of light/temperature response for
   # turbulent and storage fluxes?
   if(plot_diagnostics){
-    
+
     message("plotting basic diagnostics of light and temperature responses of turbulent and storage fluxes")
-    
+
     # initialize layout for plots
     layout(matrix(c(1,2,3,4), nrow=2, ncol=2, byrow=TRUE))
-    
+
     # plot all data and those that pass the turb flux test
     # light response
     plot(df$PAR, df$data.fluxCo2.turb.flux, type="p", ylim=c(-40,40),
@@ -530,35 +530,35 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
          ylab="turbulent CO2 flux", xlab="air temperature")
     points(df$Tair[df$UU_turb_flux_flag], df$data.fluxCo2.turb.flux[df$UU_turb_flux_flag], type="p", ylim=c(-40,40),
            pch=16, col="forestgreen")
-    
+
     # plot all data and those that pass the storage flux test
     plot(fracday, df$data.fluxCo2.stor.flux, type="p", ylim=c(-40,40),
          main=sprintf("%s: storage CO2 flux diel pattern", site), pch=16, col="grey80",
          ylab="storage CO2 flux", xlab="hour of day")
     points(fracday[df$UU_stor_flux_flag], df$data.fluxCo2.stor.flux[df$UU_stor_flux_flag], type="p", ylim=c(-40,40),
            pch=16, col="darkgoldenrod2")
-    
+
     #---------------
     # time series of net, turbulent and storage fluxes (all data)
     layout(matrix(1:3, nrow=3, ncol=1, byrow=TRUE))
-    
+
     plot(fracyr, df$data.fluxCo2.nsae.flux, type="p", ylim=c(-40,40),
          main=sprintf('%s: net flux', site), pch=16, col="grey80")
-    
+
     plot(fracyr, df$data.fluxCo2.turb.flux, type="p", ylim=c(-40,40),
          main='turbulent flux', pch=16, col="grey80")
     points(fracyr[df$UU_turb_flux_flag], df$data.fluxCo2.turb.flux[df$UU_turb_flux_flag], pch=16, col="blue")
-    
+
     plot(fracyr, df$data.fluxCo2.stor.flux, type="p", ylim=c(-40,40),
          main='storage flux', pch=16, col="grey80")
     points(fracyr[df$UU_stor_flux_flag], df$data.fluxCo2.stor.flux[df$UU_stor_flux_flag], pch=16, col="blue")
-    
+
     #---------------
     # summary of clean data
-    
+
     # 12 plots per page
     layout(matrix(1:12, nrow=3, ncol=4, byrow=TRUE))
-    
+
     # monthly (30-day) diel pattern of turbulent flux (boxplot)
     for (i in seq(0, 330, by=30)) {
       y <- df$data.fluxCo2.turb.flux[df$UU_turb_flux_flag]
@@ -608,7 +608,7 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       }
       rm(tmp)
     }
-    
+
     #---------------
     # monthly (30-day) diel pattern of storage flux (boxplot)
     for (i in seq(0, 330, by=30)) {
@@ -660,9 +660,9 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
       }
       rm(tmp)
     }
-    
+
     #---------------
-    
+
     # light response of turbulent flux (boxplot)
     for (i in seq(0, 330, by=30)) {
       y <- df$data.fluxCo2.turb.flux[df$UU_turb_flux_flag]
@@ -715,10 +715,5 @@ qaqc_NEON_data <- function(site, data_dir, plot_diagnostics = TRUE,
 
   # return this site code if successful
   return(site)
-  
+
 } #end function definition
-
-
-
-
-
